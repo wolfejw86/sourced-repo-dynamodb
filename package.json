@@ -1,21 +1,55 @@
 {
-  "name": "sourced-repo-dynamodb",
-  "version": "0.0.1",
-  "description": "",
-  "main": "index.js",
-  "scripts": {
-    "test": "jest"
-  },
-  "keywords": [],
-  "author": "Jay Wolfe",
+  "version": "0.1.0",
   "license": "MIT",
+  "main": "dist/index.js",
+  "typings": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "src"
+  ],
+  "engines": {
+    "node": ">=10"
+  },
+  "scripts": {
+    "start": "tsdx watch",
+    "build": "tsdx build",
+    "test": "tsdx test",
+    "lint": "tsdx lint",
+    "prepare": "tsdx build",
+    "size": "size-limit",
+    "analyze": "size-limit --why"
+  },
+  "peerDependencies": {},
+  "husky": {
+    "hooks": {
+      "pre-commit": "tsdx lint"
+    }
+  },
+  "name": "sourced-repo-dynamodb",
+  "author": "Jay Wolfe",
+  "module": "dist/sourced-repo-dynamodb.esm.js",
+  "size-limit": [
+    {
+      "path": "dist/sourced-repo-dynamodb.cjs.production.min.js",
+      "limit": "10 KB"
+    },
+    {
+      "path": "dist/sourced-repo-dynamodb.esm.js",
+      "limit": "10 KB"
+    }
+  ],
   "devDependencies": {
+    "@size-limit/preset-small-lib": "^6.0.1",
+    "husky": "^7.0.2",
+    "size-limit": "^6.0.1",
+    "tsdx": "^0.14.1",
+    "tslib": "^2.3.1",
     "@types/debug": "^4.1.7",
     "@types/jest": "^27.0.2",
     "@types/node": "^16.10.3",
     "@typescript-eslint/eslint-plugin": "^4.33.0",
     "@typescript-eslint/parser": "^4.33.0",
-    "eslint": "^7.32.0",
+    "eslint": "^8.0.0",
     "eslint-config-prettier": "^8.3.0",
     "eslint-plugin-prettier": "^4.0.0",
     "jest": "^27.2.5",

@@ -8,7 +8,7 @@ interface TEntityType<TEntity extends Entity> {
 }
 
 interface RepositoryOptions {
-    snapshotFrequency?: number;
+    snapshotFrequency: number;
 }
 
 /**
@@ -39,6 +39,7 @@ export class Repository<TEntity extends Entity & { id: string }> {
             snapshotFrequency: 10,
         },
     ) {
+        this.snapshotFrequency = this.opts.snapshotFrequency;
         this.entityName = entityType.name.toLowerCase();
         this.eventPrefix = `${this.entityName}events`;
         this.snapshotPrefix = `${this.entityName}snapshots`;

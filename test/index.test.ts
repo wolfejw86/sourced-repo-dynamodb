@@ -1,5 +1,5 @@
 import { Entity } from 'sourced';
-import { Repository } from './index';
+import { Repository } from '../src/index';
 
 const mockSavedTestEntityEvents = {
     Items: [
