@@ -15,6 +15,7 @@
     "build": "tsdx build",
     "test": "tsdx test",
     "lint": "tsdx lint",
+    "watch": "tsdx watch",
     "prepare": "tsdx build",
     "size": "size-limit",
     "analyze": "size-limit --why"
@@ -40,6 +41,7 @@
   ],
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.36.0",
+    "@aws-sdk/lib-dynamodb": "^3.36.0",
     "debug": "^4.3.2",
     "sourced": "^4.0.3"
   },
