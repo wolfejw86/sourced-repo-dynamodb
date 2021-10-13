@@ -89,6 +89,10 @@ export class Repository<TEntity extends Entity & { id: string }> {
     log('init');
   }
 
+  /**
+   * TODO - figure out how to allow consumers to get by a global secondary index
+   * and make it easy to use
+   */
   async get(id: string) {
     const [snapshotResult, eventsResult] = await Promise.all([
       this.client.send(
@@ -195,6 +199,8 @@ export class Repository<TEntity extends Entity & { id: string }> {
 
     const res = await this.client.send(writeTxn);
 
+    this.emitEvents(entity);
+
     entity.newEvents = [];
 
     return res;
@@ -214,56 +220,6 @@ export class Repository<TEntity extends Entity & { id: string }> {
     log(options);
 
     return;
-  }
-
-  private async commitEvents(entity: TEntity) {
-    if (entity.newEvents.length === 0) {
-      return;
-    }
-
-    if (!entity.id) {
-      new Error(
-        `Cannot commit an entity of type [${this.entityType.name}] without an [id] property`,
-      );
-    }
-
-    const events = entity.newEvents;
-
-    events.forEach((event: any) => {
-      event.id = entity.id;
-    });
-
-    log('Inserting events for %s', this.entityType.name);
-
-    /**
-     *  TODO - use batch put operations with retries OR a dynamodb transaction
-     */
-    // await Promise.all(events.map((event: any) => this.events.put(event)));
-
-    log('Successfully committed events for %s', this.entityType.name);
-
-    entity.newEvents = [];
-  }
-
-  private async commitSnapshots(
-    entity: TEntity,
-    options = { forceSnapshot: false },
-  ) {
-    if (
-      options.forceSnapshot ||
-      entity.version >= entity.snapshotVersion + this.snapshotFrequency
-    ) {
-      const snapshot = entity.snapshot();
-
-      log('Inserting snapshot for %s', this.entityType.name);
-
-      /**
-       * TODO - map to new snapshot put dynamodb operation
-       */
-      await this.snapshots.put(snapshot);
-
-      log('Successfully committed snapshot for %s', this.entityType.name);
-    }
   }
 
   private emitEvents(entity: TEntity) {
