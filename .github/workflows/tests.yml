@@ -12,7 +12,7 @@ jobs:
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v2
+        uses: actions/checkout@v1
 
       - name: Set docker context
         run: export DOCKER_HOST=$(docker context inspect --format '{{.Endpoints.docker.Host}}')
