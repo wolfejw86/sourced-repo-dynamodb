@@ -2,7 +2,7 @@ name: CI
 on: [push]
 jobs:
   build:
-    name: Build, lint, and test on Node
+    name: Build, lint, and test on Node ${{ matrix.node }} and ${{ matrix.os }}
 
     runs-on: ubuntu-latest
     strategy:
@@ -20,16 +20,13 @@ jobs:
       - name: Start containers
         run: docker-compose -f "docker-compose.yaml" up -d --build
 
-      - name: Use Node 14.x
+      - name: Use Node ${{ matrix.node }}
         uses: actions/setup-node@v1
         with:
-          node-version: 14.x
+          node-version: ${{ matrix.node }}
 
       - name: Install deps and build (with cache)
         uses: bahmutov/npm-install@v1
-
-      - name: Lint
-        run: npm lint
 
       - name: Test
         run: npm test --ci --coverage --maxWorkers=2
