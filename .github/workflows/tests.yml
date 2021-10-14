@@ -14,11 +14,11 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v1
 
-      - name: Set docker context
-        run: export DOCKER_HOST=$(docker context inspect --format '{{.Endpoints.docker.Host}}')
-
-      - name: Start containers
-        run: docker-compose -f "docker-compose.yaml" up -d --build
+      - name: Setup DynamoDB Local
+        uses: rrainn/dynamodb-action@v2.0.0
+        with:
+          port: 8000
+          cors: '*'
 
       - name: Use Node ${{ matrix.node }}
         uses: actions/setup-node@v1
@@ -33,7 +33,4 @@ jobs:
 
       - name: Build
         run: npm build
-
-      - name: Stop containers
-        if: always()
-        run: docker-compose -f "docker-compose.yaml" down
+        
