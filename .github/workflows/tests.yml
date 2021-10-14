@@ -19,14 +19,21 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
 
+      - name: Start containers
+        run: docker-compose -f "docker-compose.yaml" up -d --build
+
       - name: Install deps and build (with cache)
         uses: bahmutov/npm-install@v1
 
       - name: Lint
-        run: yarn lint
+        run: npm lint
 
       - name: Test
-        run: yarn test --ci --coverage --maxWorkers=2
+        run: npm test --ci --coverage --maxWorkers=2
 
       - name: Build
-        run: yarn build
+        run: npm build
+        
+      - name: Stop containers
+        if: always()
+        run: docker-compose -f "docker-compose.yaml" down

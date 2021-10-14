@@ -16,16 +16,12 @@ interface TEntityType<TEntity extends Entity> {
 
 interface RepositoryOptions {
   dynamoTable: string;
+  hashKey: string;
+  sortKey: string;
   awsRegion: string;
   snapshotFrequency: number;
   dynamoIndex?: string;
-}
-
-interface RepositoryInitOptions {
-  dynamoTable: string;
-  awsRegion?: string;
-  snapshotFrequency?: number;
-  dynamoIndex?: string;
+  endpoint?: string;
 }
 
 /**
@@ -41,24 +37,20 @@ export class Repository<TEntity extends Entity & { id: string }> {
   private snapshotPrefix: string;
   private eventPrefix: string;
 
-  /**
-   * TODO - figure out if it makes sense to keep these as any or to type
-   * as reference objects to ddb actions
-   */
-  private events: any;
-  private snapshots: any;
   private options: RepositoryOptions;
   private entityName: string;
   private client: DynamoDBDocumentClient;
 
   constructor(
     private entityType: TEntityType<TEntity>,
-    options: RepositoryInitOptions,
+    options: Partial<RepositoryOptions> & { dynamoTable: string },
   ) {
     this.options = Object.assign(
       {
         snapshotFrequency: 10,
         awsRegion: 'us-east-1',
+        hashKey: 'PK',
+        sortKey: 'SK',
       },
       options,
     );
@@ -71,6 +63,7 @@ export class Repository<TEntity extends Entity & { id: string }> {
     this.client = DynamoDBDocumentClient.from(
       new DynamoDBClient({
         region: this.options.awsRegion,
+        endpoint: this.options.endpoint,
       }),
       {
         marshallOptions: {
@@ -100,8 +93,8 @@ export class Repository<TEntity extends Entity & { id: string }> {
           TableName: this.options.dynamoTable,
           KeyConditionExpression: '#pk = :pk AND begins_with(#sk, :sk)',
           ExpressionAttributeNames: {
-            '#pk': 'PK',
-            '#sk': 'SK',
+            '#pk': this.options.hashKey,
+            '#sk': this.options.sortKey,
           },
           ExpressionAttributeValues: {
             ':pk': `${this.entityName}#${id}`,
@@ -116,8 +109,8 @@ export class Repository<TEntity extends Entity & { id: string }> {
           TableName: this.options.dynamoTable,
           KeyConditionExpression: '#pk = :pk AND begins_with(#sk, :sk)',
           ExpressionAttributeNames: {
-            '#pk': 'PK',
-            '#sk': 'SK',
+            '#pk': this.options.hashKey,
+            '#sk': this.options.sortKey,
           },
           ExpressionAttributeValues: {
             ':pk': `${this.entityName}#${id}`,
@@ -132,13 +125,15 @@ export class Repository<TEntity extends Entity & { id: string }> {
     const { data: snapshot } = snapshotResult.Items?.[0] || {};
     const events = (eventsResult.Items || [])
       .map((event) => event.data)
-      .filter((event) => event.version > (snapshot?.version || 0));
+      .filter((event) => event.version > (snapshot?.version || 0))
+      .sort((eventA, eventB) => (eventA > eventB ? 1 : -1));
 
     // merge snapshot and events with new entity
     return new this.entityType(snapshot, events);
   }
 
   async getAll(ids: string[]) {
+    // TODO - repeat get for all id's or do a BatchGetCommand?
     // get latest snapshots for each id
     // get latest events after timestamp of latest snapshot for each entity's respective id
 
@@ -160,6 +155,7 @@ export class Repository<TEntity extends Entity & { id: string }> {
       );
     }
 
+    // TODO - abstract formatting of these commands
     const writeItems: TransactWriteCommandInput['TransactItems'] =
       entity.newEvents.map((event) => {
         return {
@@ -167,7 +163,9 @@ export class Repository<TEntity extends Entity & { id: string }> {
             TableName: this.options.dynamoTable,
             Item: {
               PK: `${this.entityName}#${entity.id}`,
-              SK: `${this.eventPrefix}${event.version}`,
+              SK: `${this.eventPrefix}${Repository.getPaddedVersion(
+                event.version,
+              )}`,
               data: event,
             },
           },
@@ -186,7 +184,9 @@ export class Repository<TEntity extends Entity & { id: string }> {
           TableName: this.options.dynamoTable,
           Item: {
             PK: `${this.entityName}#${entity.id}`,
-            SK: `${this.snapshotPrefix}${entity.snapshotVersion}`,
+            SK: `${this.snapshotPrefix}${Repository.getPaddedVersion(
+              entity.snapshotVersion,
+            )}`,
             data: entity.snapshot(),
           },
         },
@@ -213,9 +213,7 @@ export class Repository<TEntity extends Entity & { id: string }> {
       withTransaction: true,
     },
   ) {
-    // write events for all entities
-    // write snapshots for all entities
-    // throw on error
+    // TODO - should I make a big transaction or do something else?
 
     log(options);
 
@@ -224,12 +222,33 @@ export class Repository<TEntity extends Entity & { id: string }> {
 
   private emitEvents(entity: TEntity) {
     const eventsToEmit = entity.eventsToEmit;
-    entity.eventsToEmit = [];
     eventsToEmit.forEach((event) => {
       const args = Array.from(event);
 
       // apply is necessary to allow outside control of event names
       this.entityType.prototype.emit.apply(entity, args);
     });
+    entity.eventsToEmit = [];
+  }
+
+  private static getPaddedVersion(version: number) {
+    return version.toString().padStart(15, '0');
+  }
+
+  private createBaseGetQuery(id: string, type: 'event' | 'snapshot') {
+    return {
+      TableName: this.options.dynamoTable,
+      KeyConditionExpression: '#pk = :pk AND begins_with(#sk, :sk)',
+      ExpressionAttributeNames: {
+        '#pk': 'PK',
+        '#sk': 'SK',
+      },
+      ExpressionAttributeValues: {
+        ':pk': `${this.entityName}#${id}`,
+        ':sk': type === 'event' ? this.eventPrefix : this.snapshotPrefix,
+      },
+      ScanIndexForward: false,
+      Limit: type === 'event' ? this.snapshotFrequency : 1,
+    };
   }
 }

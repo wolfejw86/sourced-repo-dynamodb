@@ -1,81 +1,154 @@
 import { Entity } from 'sourced';
 import { Repository } from '../src/index';
+import {
+  CreateTableCommand,
+  DeleteTableCommand,
+  DynamoDBClient,
+  paginateScan,
+} from '@aws-sdk/client-dynamodb';
+import {
+  DynamoDBDocumentClient,
+  TransactWriteCommand,
+  TransactWriteCommandInput,
+  QueryCommand,
+  DeleteCommand,
+  ScanCommand,
+} from '@aws-sdk/lib-dynamodb';
 
-const mockSavedTestEntityEvents = {
-  Items: [
-    {
-      method: 'init',
-      data: undefined,
-      timestamp: 1606703172298,
-      version: 1,
-    },
-    {
-      method: 'addOne',
-      data: undefined,
-      timestamp: 1606703172298,
-      version: 2,
-    },
-    {
-      method: 'addOne',
-      data: undefined,
-      timestamp: 1606703172298,
-      version: 3,
-    },
-  ],
-};
+const TEST_ENDPOINT = 'http://localhost:8000';
+const TEST_REGION = 'us-east-1';
+const TEST_TABLE_NAME = 'EntityTesting';
 
-const ArcTablesDynamoMock = {
-  testentityevents: {
-    put: jest.fn().mockResolvedValue(undefined),
-    get: jest.fn().mockResolvedValue(mockSavedTestEntityEvents),
-    query: jest.fn().mockResolvedValue(mockSavedTestEntityEvents),
+const baseClient = new DynamoDBClient({
+  region: TEST_REGION,
+  endpoint: TEST_ENDPOINT,
+});
+const client = DynamoDBDocumentClient.from(baseClient, {
+  marshallOptions: {
+    // Whether to automatically convert empty strings, blobs, and sets to `null`.
+    convertEmptyValues: false, // false, by default.
+    // Whether to remove undefined values while marshalling.
+    removeUndefinedValues: true, // false, by default.
+    // Whether to convert typeof object to map attribute.
+    convertClassInstanceToMap: true, // false, by default.
   },
-  testentitysnapshots: {
-    put: jest.fn().mockResolvedValue(undefined),
-    query: jest.fn().mockResolvedValue({ Items: [] }),
-    get: jest.fn().mockResolvedValue({
-      _eventsCount: 0,
-      snapshotVersion: 3,
-      timestamp: 1606703254404,
-      version: 3,
-      total: 2,
-      id: 'test-id',
-    }),
-  },
-};
+});
 
-class TestEntity extends Entity {
-  id: string;
-  total: number;
-
-  constructor(snapshot?: any, events?: any) {
-    super();
-
-    this.total = 0;
-    this.id = '';
-
-    this.rehydrate(snapshot, events);
-  }
-
-  init() {
-    this.id = 'test-id';
-    this.digest('init', {});
-  }
-
-  addOne() {
-    this.total += 1;
-    this.digest('addOne', {});
-    this.enqueue('oneAdded');
-  }
-}
-
-describe('Repository tests', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
+// create table we will use
+describe('sourced-repo-dynamodb tests', () => {
+  beforeAll(async () => {
+    await client.send(
+      new CreateTableCommand({
+        TableName: TEST_TABLE_NAME,
+        KeySchema: [
+          {
+            AttributeName: 'PK',
+            KeyType: 'HASH',
+          },
+          {
+            AttributeName: 'SK',
+            KeyType: 'RANGE',
+          },
+        ],
+        AttributeDefinitions: [
+          {
+            AttributeName: 'PK',
+            AttributeType: 'S',
+          },
+          {
+            AttributeName: 'SK',
+            AttributeType: 'S',
+          },
+        ],
+        ProvisionedThroughput: {
+          ReadCapacityUnits: 1,
+          WriteCapacityUnits: 1,
+        },
+      }),
+    );
   });
 
-  afterEach(() => {
-    jest.clearAllMocks();
+  // delete table at the end
+  afterAll(async () => {
+    await client.send(
+      new DeleteTableCommand({
+        TableName: TEST_TABLE_NAME,
+      }),
+    );
+  });
+
+  // clear items from test table after each test - brute force but works
+  afterEach(async () => {
+    const scanner = paginateScan(
+      {
+        client: baseClient,
+      },
+      { TableName: TEST_TABLE_NAME },
+    );
+
+    for await (const scanResult of scanner) {
+      const itemsToDelete = scanResult.Items || [];
+      await Promise.all(
+        itemsToDelete.map((item) => {
+          return client.send(
+            new DeleteCommand({
+              TableName: TEST_TABLE_NAME,
+              Key: {
+                PK: item.PK.S,
+                SK: item.SK.S,
+              },
+            }),
+          );
+        }),
+      );
+    }
+  });
+
+  class TestEntity extends Entity {
+    id: string;
+    total: number;
+    stuff: any[];
+
+    constructor(snapshot?: any, events?: any) {
+      super();
+
+      this.total = 0;
+      this.id = '';
+      this.stuff = [];
+
+      this.rehydrate(snapshot, events);
+    }
+
+    init() {
+      this.id = 'test-id';
+      this.digest('init', {});
+    }
+
+    addOne() {
+      this.total += 1;
+      this.digest('addOne', {});
+    }
+
+    add(params: { amount: number }) {
+      this.total += params.amount;
+      this.digest('add', params);
+    }
+
+    subtract(params: { amount: number }) {
+      this.total -= params.amount;
+      this.digest('subtract', params);
+    }
+
+    emitTest(params: any) {
+      this.stuff.push(params);
+      this.enqueue('emitTest', params);
+      this.digest('emitTest', params);
+    }
+  }
+
+  const repo = new Repository(TestEntity, {
+    dynamoTable: TEST_TABLE_NAME,
+    endpoint: TEST_ENDPOINT,
   });
 
   it('should create a Repository', () => {
@@ -89,30 +162,15 @@ describe('Repository tests', () => {
     testEntity.init();
     testEntity.addOne();
     testEntity.addOne();
+    testEntity.subtract({ amount: 1 });
 
-    const repo = new Repository(TestEntity, { dynamoTable: 'TestTable' });
+    await repo.commit(testEntity, { forceSnapshot: true });
 
-    const oneAdded = new Promise((resolve) =>
-      testEntity.once('oneAdded', resolve),
-    );
+    const fetchedEntity = await repo.get(testEntity.id);
 
-    await repo.init();
-    await repo.commit(testEntity as any, { forceSnapshot: true });
-
-    await oneAdded;
-
-    expect(
-      ArcTablesDynamoMock.testentityevents.put.mock.calls[0][0].method,
-    ).toEqual('init');
-    expect(
-      ArcTablesDynamoMock.testentityevents.put.mock.calls[1][0].method,
-    ).toEqual('addOne');
-    expect(
-      ArcTablesDynamoMock.testentityevents.put.mock.calls[2][0].method,
-    ).toEqual('addOne');
-    expect(
-      ArcTablesDynamoMock.testentitysnapshots.put.mock.calls[0][0].total,
-    ).toEqual(2);
+    expect(fetchedEntity.snapshotVersion).toBe(4);
+    expect(fetchedEntity.snapshot().total).toBe(1);
+    expect(fetchedEntity.snapshot().version).toBe(4);
   });
 
   it('should only commit events when snapshot frequency is not met', async () => {
@@ -121,63 +179,46 @@ describe('Repository tests', () => {
     testEntity.addOne();
     testEntity.addOne();
 
-    const repo = new Repository(TestEntity, { dynamoTable: 'TestTable' });
-
-    const oneAdded = new Promise((resolve) =>
-      testEntity.once('oneAdded', resolve),
-    );
-
-    await repo.init();
     await repo.commit(testEntity);
 
-    await oneAdded;
+    const fetchedEntity = await repo.get(testEntity.id);
 
-    expect(
-      ArcTablesDynamoMock.testentityevents.put.mock.calls[0][0].method,
-    ).toEqual('init');
-    expect(
-      ArcTablesDynamoMock.testentityevents.put.mock.calls[1][0].method,
-    ).toEqual('addOne');
-    expect(
-      ArcTablesDynamoMock.testentityevents.put.mock.calls[2][0].method,
-    ).toEqual('addOne');
-    expect(ArcTablesDynamoMock.testentitysnapshots.put).not.toHaveBeenCalled();
+    expect(fetchedEntity.snapshotVersion).toBe(0);
+    expect(fetchedEntity.version).toBe(3);
+    expect(fetchedEntity.total).toBe(2);
   });
 
-  it('should fire enqueued events after successful commit', async () => {
+  it('should fire enqueued events after successful commit', (done) => {
     const testEntity = new TestEntity();
-    const repo = new Repository(TestEntity, { dynamoTable: 'TestTable' });
-    await repo.init();
 
     testEntity.init();
     testEntity.addOne();
     testEntity.addOne();
+    testEntity.emitTest({ someStuff: true });
 
-    let emitted = 0;
-
-    testEntity.on('oneAdded', () => {
-      emitted++;
+    testEntity.on('emitTest', () => {
+      // it will only get here if it emits correctly
+      done();
     });
 
-    expect(testEntity.eventsToEmit.length).toBe(2);
+    expect(testEntity.eventsToEmit.length).toBe(1);
 
-    await repo.commit(testEntity);
-
-    expect(emitted).toBe(2);
+    repo.commit(testEntity);
   });
 
-  it('should be able to retrieve entity that only has events', async () => {
-    const repo = new Repository(TestEntity, { dynamoTable: 'TestTable' });
-    await repo.init();
+  it('should be able to retrieve latest snapshot and events when there is a larger amount of events', async () => {
+    const entity = new TestEntity();
 
-    const testEntity = await repo.get('test-id');
+    entity.init();
 
-    expect(testEntity.id).toBe('test-id');
-    expect(testEntity.total).toBe(2);
+    for (let i = 0; i < 20; i++) {
+      entity.add({ amount: i });
+    }
+
+    await repo.commit(entity);
+
+    const fetchedEntity = await repo.get(entity.id);
+
+    expect(fetchedEntity.id).toBe(entity.id);
   });
-  it.todo(
-    'should retrieve latest snapshot and events for entity and merge together into model',
-  );
-  it.todo('should throw error when commit fails for events');
-  it.todo('should throw when commit fails for events');
 });
