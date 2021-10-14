@@ -8,13 +8,11 @@ jobs:
     strategy:
       matrix:
         node: ['12.x','14.x']
-        os: [ubuntu-latest, windows-latest, macOS-latest]
+        os: [ubuntu-latest, windows-latest]
 
     steps:
       - name: Checkout repo
         uses: actions/checkout@v1
-
-      - uses: docker-practice/actions-setup-docker@master
 
       - name: Setup DynamoDB Local
         uses: rrainn/dynamodb-action@v2.0.0
