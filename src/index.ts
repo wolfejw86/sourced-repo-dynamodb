@@ -122,7 +122,9 @@ export class Repository<TEntity extends Entity & { id: string }> {
       ),
     ]);
 
-    const { data: snapshot } = snapshotResult.Items?.[0] || {};
+    const { data: snapshot } =
+      (snapshotResult.Items && snapshotResult.Items[0]) || {};
+
     const events = (eventsResult.Items || [])
       .map((event) => event.data)
       .filter((event) => event.version > (snapshot?.version || 0))
