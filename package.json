@@ -16,7 +16,6 @@
     "test": "tsdx test",
     "lint": "tsdx lint",
     "watch": "tsdx watch",
-    "prepare": "tsdx build",
     "size": "size-limit",
     "analyze": "size-limit --why"
   },
