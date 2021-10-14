@@ -14,6 +14,8 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v1
 
+      - uses: docker-practice/actions-setup-docker@master
+
       - name: Setup DynamoDB Local
         uses: rrainn/dynamodb-action@v2.0.0
         with:
