@@ -19,6 +19,10 @@ const TEST_ENDPOINT = 'http://localhost:8000';
 const TEST_REGION = 'us-east-1';
 const TEST_TABLE_NAME = 'EntityTesting';
 
+// set dummy credentials for testing
+process.env.AWS_ACCESS_KEY_ID = 'dummy';
+process.env.AWS_SECRET_ACCESS_KEY = 'dummy';
+
 const baseClient = new DynamoDBClient({
   region: TEST_REGION,
   endpoint: TEST_ENDPOINT,
