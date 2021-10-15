@@ -24,14 +24,6 @@ interface RepositoryOptions {
   endpoint?: string;
 }
 
-/**
- * TODO
- * - [ ] figure out how to fit with generic single table design - possibly accept hash and sort key as config params
- *       NOTE: right now the old package uses 2 separate tables for events and snapshots, this is bad
- * - [ ] figure out how to access latest events for an entity by timestamp with starts_with() query generically - I think you'll need an ID no matter what
- * - [ ] figure out how to access latest snapshots for entity by timestamp with starts_with() query generically
- */
-
 export class Repository<TEntity extends Entity & { id: string }> {
   private snapshotFrequency: number;
   private snapshotPrefix: string;
