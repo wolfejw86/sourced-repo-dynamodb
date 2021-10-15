@@ -88,38 +88,8 @@ export class Repository<TEntity extends Entity & { id: string }> {
    */
   async get(id: string) {
     const [snapshotResult, eventsResult] = await Promise.all([
-      this.client.send(
-        new QueryCommand({
-          TableName: this.options.dynamoTable,
-          KeyConditionExpression: '#pk = :pk AND begins_with(#sk, :sk)',
-          ExpressionAttributeNames: {
-            '#pk': this.options.hashKey,
-            '#sk': this.options.sortKey,
-          },
-          ExpressionAttributeValues: {
-            ':pk': `${this.entityName}#${id}`,
-            ':sk': this.snapshotPrefix,
-          },
-          ScanIndexForward: false,
-          Limit: 1,
-        }),
-      ),
-      this.client.send(
-        new QueryCommand({
-          TableName: this.options.dynamoTable,
-          KeyConditionExpression: '#pk = :pk AND begins_with(#sk, :sk)',
-          ExpressionAttributeNames: {
-            '#pk': this.options.hashKey,
-            '#sk': this.options.sortKey,
-          },
-          ExpressionAttributeValues: {
-            ':pk': `${this.entityName}#${id}`,
-            ':sk': this.eventPrefix,
-          },
-          ScanIndexForward: false,
-          Limit: this.snapshotFrequency,
-        }),
-      ),
+      this.client.send(this.createGetSnapshotCommand(id)),
+      this.client.send(this.createGetEventCommand(id)),
     ]);
 
     const { data: snapshot } = snapshotResult.Items?.[0] || {};
@@ -133,14 +103,7 @@ export class Repository<TEntity extends Entity & { id: string }> {
   }
 
   async getAll(ids: string[]) {
-    // TODO - repeat get for all id's or do a BatchGetCommand?
-    // get latest snapshots for each id
-    // get latest events after timestamp of latest snapshot for each entity's respective id
-
-    log(ids);
-
-    // merge snapshot and events with new entity
-    return new this.entityType();
+    return Promise.all(ids.map((id) => this.get(id)));
   }
 
   async commit(
@@ -208,9 +171,8 @@ export class Repository<TEntity extends Entity & { id: string }> {
 
   async commitAll(
     entities: TEntity[],
-    options: { forceSnapshots: boolean; withTransaction: boolean } = {
+    options: { forceSnapshots: boolean } = {
       forceSnapshots: false,
-      withTransaction: true,
     },
   ) {
     // TODO - should I make a big transaction or do something else?
@@ -235,20 +197,37 @@ export class Repository<TEntity extends Entity & { id: string }> {
     return version.toString().padStart(15, '0');
   }
 
-  private createBaseGetQuery(id: string, type: 'event' | 'snapshot') {
+  private createGetEventCommand(id: string) {
+    return new QueryCommand({
+      ...this.createBaseGetQuery(),
+      ExpressionAttributeValues: {
+        ':pk': `${this.entityName}#${id}`,
+        ':sk': this.eventPrefix,
+      },
+      Limit: this.snapshotFrequency,
+    });
+  }
+
+  private createGetSnapshotCommand(id: string) {
+    return new QueryCommand({
+      ...this.createBaseGetQuery(),
+      ExpressionAttributeValues: {
+        ':pk': `${this.entityName}#${id}`,
+        ':sk': this.snapshotPrefix,
+      },
+      Limit: 1,
+    });
+  }
+
+  private createBaseGetQuery() {
     return {
       TableName: this.options.dynamoTable,
+      ScanIndexForward: false,
       KeyConditionExpression: '#pk = :pk AND begins_with(#sk, :sk)',
       ExpressionAttributeNames: {
         '#pk': 'PK',
         '#sk': 'SK',
       },
-      ExpressionAttributeValues: {
-        ':pk': `${this.entityName}#${id}`,
-        ':sk': type === 'event' ? this.eventPrefix : this.snapshotPrefix,
-      },
-      ScanIndexForward: false,
-      Limit: type === 'event' ? this.snapshotFrequency : 1,
     };
   }
 }
