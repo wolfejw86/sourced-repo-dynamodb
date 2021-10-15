@@ -1,5 +1,9 @@
 ## Sourced Repo DynamoDB
 
+### Background
+
+Repository implementation for DynamoDB and the [sourced](https://www.npmjs.com/package/sourced) pattern. Check out sourced here: https://www.npmjs.com/package/sourced
+
 - [ ] use batch put operations with retries OR a dynamodb transaction for committing
 - [ ] build a docs website or more extensive readme
 - [ ] build a small app as a demo
