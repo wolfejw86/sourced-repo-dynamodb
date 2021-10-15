@@ -78,10 +78,6 @@ export class Repository<TEntity extends Entity & { id: string }> {
     );
   }
 
-  async init() {
-    log('init');
-  }
-
   /**
    * TODO - figure out how to allow consumers to get by a global secondary index
    * and make it easy to use
@@ -108,17 +104,59 @@ export class Repository<TEntity extends Entity & { id: string }> {
 
   async commit(
     entity: TEntity,
-    options: { forceSnapshot: boolean } = {
-      forceSnapshot: false,
+    options: { forceSnapshots: boolean } = {
+      forceSnapshots: false,
     },
   ) {
     if (!entity.id) {
-      new Error(
+      throw new Error(
         `Cannot commit an entity of type [${this.entityType.name}] without an [id] property.`,
       );
     }
 
-    // TODO - abstract formatting of these commands
+    await this.client.send(
+      new TransactWriteCommand({
+        TransactItems: this.buildTransactWriteItemsForCommit(entity, options),
+      }),
+    );
+
+    this.emitEvents(entity);
+
+    entity.newEvents = [];
+  }
+
+  async commitAll(
+    entities: TEntity[],
+    options: { forceSnapshots: boolean } = {
+      forceSnapshots: false,
+    },
+  ) {
+    if (!entities.every((e) => !!e.id)) {
+      throw new Error(
+        `Cannot commit an entity of type [${this.entityType.name}] without an [id] property.`,
+      );
+    }
+
+    const writeItems = entities
+      .map((e) => this.buildTransactWriteItemsForCommit(e, options))
+      .flat();
+
+    await this.client.send(
+      new TransactWriteCommand({
+        TransactItems: writeItems,
+      }),
+    );
+
+    entities.forEach((e) => {
+      this.emitEvents(e);
+      e.newEvents = [];
+    });
+  }
+
+  private buildTransactWriteItemsForCommit(
+    entity: TEntity,
+    options: { forceSnapshots: boolean } = { forceSnapshots: false },
+  ) {
     const writeItems: TransactWriteCommandInput['TransactItems'] =
       entity.newEvents.map((event) => {
         return {
@@ -136,12 +174,9 @@ export class Repository<TEntity extends Entity & { id: string }> {
       });
 
     if (
-      options.forceSnapshot ||
+      options.forceSnapshots ||
       entity.version >= entity.snapshotVersion + this.snapshotFrequency
     ) {
-      const snapshot = entity.snapshot();
-      log('writing snapshot', snapshot);
-
       writeItems.push({
         Put: {
           TableName: this.options.dynamoTable,
@@ -156,30 +191,7 @@ export class Repository<TEntity extends Entity & { id: string }> {
       });
     }
 
-    const writeTxn = new TransactWriteCommand({
-      TransactItems: writeItems,
-    });
-
-    const res = await this.client.send(writeTxn);
-
-    this.emitEvents(entity);
-
-    entity.newEvents = [];
-
-    return res;
-  }
-
-  async commitAll(
-    entities: TEntity[],
-    options: { forceSnapshots: boolean } = {
-      forceSnapshots: false,
-    },
-  ) {
-    // TODO - should I make a big transaction or do something else?
-
-    log(options);
-
-    return;
+    return writeItems;
   }
 
   private emitEvents(entity: TEntity) {

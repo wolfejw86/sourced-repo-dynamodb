@@ -168,7 +168,7 @@ describe('sourced-repo-dynamodb tests', () => {
     testEntity.addOne();
     testEntity.subtract({ amount: 1 });
 
-    await repo.commit(testEntity, { forceSnapshot: true });
+    await repo.commit(testEntity, { forceSnapshots: true });
 
     const fetchedEntity = await repo.get(testEntity.id);
 
@@ -232,12 +232,12 @@ describe('sourced-repo-dynamodb tests', () => {
     const e2 = new TestEntity();
     e2.init({ id: 'e2' });
 
-    for (let i = 0; i < 15; i++) {
+    for (let i = 0; i < 10; i++) {
       e1.addOne();
       e2.addOne();
     }
 
-    await Promise.all([repo.commit(e1), repo.commit(e2)]);
+    await repo.commitAll([e1, e2]);
 
     const [e1Fetched, e2Fetched] = await repo.getAll([e1.id, e2.id]);
 
