@@ -1,5 +1,5 @@
 {
-  "version": "1.0.2",
+  "version": "0.0.0-development",
   "license": "MIT",
   "main": "dist/index.js",
   "typings": "dist/index.d.ts",
@@ -19,7 +19,8 @@
     "watch": "tsdx watch",
     "prepare": "tsdx build",
     "size": "size-limit",
-    "analyze": "size-limit --why"
+    "analyze": "size-limit --why",
+    "semantic-release": "semantic-release"
   },
   "peerDependencies": {},
   "husky": {
@@ -63,6 +64,11 @@
     "ts-jest": "^27.0.5",
     "tsdx": "^0.14.1",
     "tslib": "^2.3.1",
-    "typescript": "^4.4.3"
+    "typescript": "^4.4.3",
+    "semantic-release": "^18.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/wolfejw86/sourced-repo-dynamodb.git"
   }
 }
