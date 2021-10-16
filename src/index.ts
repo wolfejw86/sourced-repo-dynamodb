@@ -22,7 +22,7 @@ interface RepositoryOptions {
   snapshotFrequency: number;
   dynamoIndex?: string;
   endpoint?: string;
-  client?: DynamoDBDocumentClient;
+  client?: DynamoDBClient | DynamoDBDocumentClient;
 }
 
 export class Repository<TEntity extends Entity & { id: string }> {
@@ -53,26 +53,22 @@ export class Repository<TEntity extends Entity & { id: string }> {
     this.eventPrefix = `${this.entityName}events#`;
     this.snapshotPrefix = `${this.entityName}snapshots#`;
 
-    if (options.client) {
-      this.client = options.client;
-    } else {
-      this.client = DynamoDBDocumentClient.from(
-        new DynamoDBClient({
-          region: this.options.awsRegion,
-          endpoint: this.options.endpoint,
-        }),
-        {
-          marshallOptions: {
-            // Whether to automatically convert empty strings, blobs, and sets to `null`.
-            convertEmptyValues: false, // false, by default.
-            // Whether to remove undefined values while marshalling.
-            removeUndefinedValues: true, // false, by default.
-            // Whether to convert typeof object to map attribute.
-            convertClassInstanceToMap: true, // false, by default.
-          },
+    this.client = DynamoDBDocumentClient.from(
+      new DynamoDBClient({
+        region: this.options.awsRegion,
+        endpoint: this.options.endpoint,
+      }),
+      {
+        marshallOptions: {
+          // Whether to automatically convert empty strings, blobs, and sets to `null`.
+          convertEmptyValues: false, // false, by default.
+          // Whether to remove undefined values while marshalling.
+          removeUndefinedValues: true, // false, by default.
+          // Whether to convert typeof object to map attribute.
+          convertClassInstanceToMap: true, // false, by default.
         },
-      );
-    }
+      },
+    );
   }
 
   /**
