@@ -7,6 +7,8 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
+      - name: Setup DynamoDB Local
+        uses: rrainn/dynamodb-action@v2.0.0
       - uses: actions/checkout@v2
       - uses: actions/setup-node@v1
         with:
