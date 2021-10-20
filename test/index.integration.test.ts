@@ -6,14 +6,7 @@ import {
   DynamoDBClient,
   paginateScan,
 } from '@aws-sdk/client-dynamodb';
-import {
-  DynamoDBDocumentClient,
-  TransactWriteCommand,
-  TransactWriteCommandInput,
-  QueryCommand,
-  DeleteCommand,
-  ScanCommand,
-} from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, DeleteCommand } from '@aws-sdk/lib-dynamodb';
 
 const TEST_ENDPOINT = 'http://localhost:8000';
 const TEST_REGION = 'us-east-1';
@@ -175,6 +168,18 @@ describe('sourced-repo-dynamodb tests', () => {
     expect(fetchedEntity.snapshotVersion).toBe(4);
     expect(fetchedEntity.snapshot().total).toBe(1);
     expect(fetchedEntity.snapshot().version).toBe(4);
+  });
+
+  it('should use a PutCommand when only 1 event to write', async () => {
+    const testEntity = new TestEntity();
+    testEntity.init();
+
+    await repo.commit(testEntity, { forceSnapshots: false });
+
+    const fetchedEntity = await repo.get(testEntity.id);
+
+    expect(fetchedEntity.snapshot().total).toBe(0);
+    expect(fetchedEntity.snapshot().version).toBe(1);
   });
 
   it('should only commit events when snapshot frequency is not met', async () => {

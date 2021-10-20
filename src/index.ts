@@ -6,6 +6,7 @@ import {
   TransactWriteCommand,
   TransactWriteCommandInput,
   QueryCommand,
+  PutCommand,
 } from '@aws-sdk/lib-dynamodb';
 
 const log = debug('sourced-repo-dynamodb');
@@ -29,7 +30,8 @@ export class Repository<TEntity extends Entity & { id: string }> {
   private snapshotFrequency: number;
   private snapshotPrefix: string;
   private eventPrefix: string;
-
+  private hashKey: string;
+  private sortKey: string;
   private options: RepositoryOptions;
   private entityName: string;
   private client: DynamoDBDocumentClient;
@@ -52,6 +54,8 @@ export class Repository<TEntity extends Entity & { id: string }> {
     this.entityName = entityType.name.toLowerCase();
     this.eventPrefix = `${this.entityName}events#`;
     this.snapshotPrefix = `${this.entityName}snapshots#`;
+    this.hashKey = this.options.hashKey;
+    this.sortKey = this.options.sortKey;
 
     this.client = DynamoDBDocumentClient.from(
       new DynamoDBClient({
@@ -91,6 +95,9 @@ export class Repository<TEntity extends Entity & { id: string }> {
     return new this.entityType(snapshot, events);
   }
 
+  /**
+   * Retrieves all entities for each of their respective ids
+   */
   async getAll(ids: string[]) {
     return Promise.all(ids.map((id) => this.get(id)));
   }
@@ -105,6 +112,31 @@ export class Repository<TEntity extends Entity & { id: string }> {
       throw new Error(
         `Cannot commit an entity of type [${this.entityType.name}] without an [id] property.`,
       );
+    }
+
+    if (
+      !this.shouldWriteSnapshot(entity) &&
+      !options.forceSnapshots &&
+      entity.newEvents.length === 1
+    ) {
+      const event = entity.newEvents.pop();
+
+      await this.client.send(
+        new PutCommand({
+          TableName: this.options.dynamoTable,
+          Item: {
+            [this.hashKey]: `${this.entityName}#${entity.id}`,
+            [this.sortKey]: `${this.eventPrefix}${Repository.getPaddedVersion(
+              event.version,
+            )}`,
+            data: event,
+          },
+        }),
+      );
+
+      this.emitEvents(entity);
+
+      return;
     }
 
     await this.client.send(
@@ -148,7 +180,7 @@ export class Repository<TEntity extends Entity & { id: string }> {
 
   private buildTransactWriteItemsForCommit(
     entity: TEntity,
-    options: { forceSnapshots: boolean } = { forceSnapshots: false },
+    options: { forceSnapshots: boolean },
   ) {
     const writeItems: TransactWriteCommandInput['TransactItems'] =
       entity.newEvents.map((event) => {
@@ -156,8 +188,8 @@ export class Repository<TEntity extends Entity & { id: string }> {
           Put: {
             TableName: this.options.dynamoTable,
             Item: {
-              PK: `${this.entityName}#${entity.id}`,
-              SK: `${this.eventPrefix}${Repository.getPaddedVersion(
+              [this.hashKey]: `${this.entityName}#${entity.id}`,
+              [this.sortKey]: `${this.eventPrefix}${Repository.getPaddedVersion(
                 event.version,
               )}`,
               data: event,
@@ -166,18 +198,15 @@ export class Repository<TEntity extends Entity & { id: string }> {
         };
       });
 
-    if (
-      options.forceSnapshots ||
-      entity.version >= entity.snapshotVersion + this.snapshotFrequency
-    ) {
+    if (options.forceSnapshots || this.shouldWriteSnapshot(entity)) {
       writeItems.push({
         Put: {
           TableName: this.options.dynamoTable,
           Item: {
-            PK: `${this.entityName}#${entity.id}`,
-            SK: `${this.snapshotPrefix}${Repository.getPaddedVersion(
-              entity.snapshotVersion,
-            )}`,
+            [this.hashKey]: `${this.entityName}#${entity.id}`,
+            [this.sortKey]: `${
+              this.snapshotPrefix
+            }${Repository.getPaddedVersion(entity.snapshotVersion)}`,
             data: entity.snapshot(),
           },
         },
@@ -185,6 +214,10 @@ export class Repository<TEntity extends Entity & { id: string }> {
     }
 
     return writeItems;
+  }
+
+  private shouldWriteSnapshot(entity: TEntity) {
+    return entity.version >= entity.snapshotVersion + this.snapshotFrequency;
   }
 
   private emitEvents(entity: TEntity) {
