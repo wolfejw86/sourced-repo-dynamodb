@@ -1,5 +1,7 @@
 ## Sourced Repo DynamoDB
 
+![Known Vulnerabilities](https://snyk.io/test/github/wolfejw86/sourced-repo-dynamodb/badge.svg)
+
 ### Background
 
 Repository implementation for DynamoDB and the [sourced](https://www.npmjs.com/package/sourced) pattern. Check out sourced here: https://www.npmjs.com/package/sourced
