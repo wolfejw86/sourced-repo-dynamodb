@@ -34,11 +34,11 @@
   "size-limit": [
     {
       "path": "dist/sourced-repo-dynamodb.cjs.production.min.js",
-      "limit": "10 KB"
+      "limit": "20 KB"
     },
     {
       "path": "dist/sourced-repo-dynamodb.esm.js",
-      "limit": "10 KB"
+      "limit": "20 KB"
     }
   ],
   "dependencies": {
