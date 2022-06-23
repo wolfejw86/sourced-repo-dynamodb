@@ -44,7 +44,7 @@
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.36.1",
     "@aws-sdk/lib-dynamodb": "^3.36.1",
-    "sourced": "^4.0.3"
+    "sourced": "^4.0.6"
   },
   "devDependencies": {
     "@size-limit/preset-small-lib": "^6.0.1",
