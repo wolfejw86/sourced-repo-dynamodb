@@ -1,5 +1,4 @@
 import { Entity } from 'sourced';
-import debug from 'debug';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import {
   DynamoDBDocumentClient,
@@ -8,8 +7,6 @@ import {
   QueryCommand,
   PutCommand,
 } from '@aws-sdk/lib-dynamodb';
-
-const log = debug('sourced-repo-dynamodb');
 
 interface TEntityType<TEntity extends Entity> {
   new (snapshot?: any, events?: any[]): TEntity;
