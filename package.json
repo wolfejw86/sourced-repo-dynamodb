@@ -38,7 +38,7 @@
     },
     {
       "path": "dist/sourced-repo-dynamodb.esm.js",
-      "limit": "20 KB"
+      "limit": "30 KB"
     }
   ],
   "dependencies": {
