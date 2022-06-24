@@ -1,6 +1,12 @@
 name: auto-merge
+
+permissions:
+  pull-requests: write
+  contents: write
+
 on:
   pull_request:
+
 jobs:
   auto-merge:
     runs-on: ubuntu-latest
