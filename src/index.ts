@@ -260,8 +260,8 @@ export class Repository<TEntity extends Entity & { id: string }> {
       ScanIndexForward: false,
       KeyConditionExpression: '#pk = :pk AND begins_with(#sk, :sk)',
       ExpressionAttributeNames: {
-        '#pk': 'PK',
-        '#sk': 'SK',
+        '#pk': this.hashKey,
+        '#sk': this.sortKey,
       },
     };
   }
